@@ -1,0 +1,397 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --ivory: #faf8f4;
+  --ivory-dark: #f2ede4;
+  --ivory-border: #e8dfd0;
+  --warm-white: #fffefb;
+  --teal: #0d9488;
+  --teal-light: #14b8a6;
+  --teal-dark: #0f766e;
+  --gold: #d97706;
+  --gold-light: #f59e0b;
+  --gold-pale: #fef3c7;
+  --emerald: #059669;
+  --emerald-light: #10b981;
+  --royal: #1d4ed8;
+  --royal-light: #3b82f6;
+  --rose: #e11d48;
+  --warm-gray: #78716c;
+  --warm-gray-light: #a8a29e;
+  --dark-text: #1c1917;
+  --mid-text: #44403c;
+  --surface: #ffffff;
+  --surface2: #fdf9f3;
+  --shadow-warm: rgba(120, 80, 20, 0.08);
+  --shadow-teal: rgba(13, 148, 136, 0.15);
+  --shadow-gold: rgba(217, 119, 6, 0.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--ivory);
+  color: var(--dark-text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--ivory-dark); }
+::-webkit-scrollbar-thumb { background: var(--ivory-border); border-radius: 3px; }
+
+/* Typography */
+.font-display { font-family: 'Playfair Display', serif; }
+.font-mono { font-family: 'DM Mono', monospace; }
+
+/* Glass card — warm version */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--ivory-border);
+  border-radius: 20px;
+  box-shadow: 0 4px 24px var(--shadow-warm), 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 40px var(--shadow-warm), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* Gradient text */
+.text-gradient-teal {
+  background: linear-gradient(135deg, var(--teal) 0%, var(--royal-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, var(--gold) 0%, var(--rose) 60%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Noise texture overlay */
+.texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 0;
+}
+
+/* Animated gradient bg */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.hero-gradient {
+  background: linear-gradient(-45deg, #faf8f4, #f0f9ff, #fef9ee, #f0fdf9);
+  background-size: 400% 400%;
+  animation: gradientShift 12s ease infinite;
+}
+
+/* Warm orb decorations */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+.orb-teal { background: radial-gradient(circle, #99f6e4, #0d9488); }
+.orb-gold { background: radial-gradient(circle, #fde68a, #d97706); }
+.orb-blue { background: radial-gradient(circle, #bfdbfe, #3b82f6); }
+
+/* Button styles */
+.btn-primary {
+  background: linear-gradient(135deg, var(--teal) 0%, var(--royal) 100%);
+  color: white;
+  padding: 12px 28px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px var(--shadow-teal);
+  letter-spacing: 0.01em;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px var(--shadow-teal);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold) 0%, #b45309 100%);
+  color: white;
+  padding: 12px 28px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px var(--shadow-gold);
+}
+.btn-gold:hover { transform: translateY(-1px); box-shadow: 0 8px 24px var(--shadow-gold); }
+
+.btn-outline {
+  background: transparent;
+  color: var(--teal);
+  padding: 11px 26px;
+  border-radius: 14px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  border: 1.5px solid var(--teal);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-outline:hover { background: var(--teal); color: white; }
+
+/* Input */
+.input-warm {
+  background: var(--ivory);
+  border: 1.5px solid var(--ivory-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  color: var(--dark-text);
+  transition: border-color 0.2s;
+  width: 100%;
+  outline: none;
+}
+.input-warm:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(13,148,136,0.1); }
+.input-warm::placeholder { color: var(--warm-gray-light); }
+
+/* Badge pill */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 100px;
+  letter-spacing: 0.03em;
+}
+.badge-teal { background: rgba(13,148,136,0.1); color: var(--teal-dark); border: 1px solid rgba(13,148,136,0.2); }
+.badge-gold { background: var(--gold-pale); color: #92400e; border: 1px solid rgba(217,119,6,0.2); }
+.badge-emerald { background: rgba(5,150,105,0.1); color: var(--emerald); border: 1px solid rgba(5,150,105,0.2); }
+.badge-royal { background: rgba(29,78,216,0.08); color: var(--royal); border: 1px solid rgba(29,78,216,0.15); }
+
+/* Progress bar */
+.progress-bar {
+  height: 6px;
+  background: var(--ivory-border);
+  border-radius: 100px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 100px;
+  transition: width 0.7s ease;
+}
+
+/* AI Chat bubbles */
+.chat-bubble-ai {
+  background: linear-gradient(135deg, #f0fdf9, #e0f2fe);
+  border: 1px solid rgba(13,148,136,0.15);
+  border-radius: 18px 18px 18px 4px;
+  padding: 14px 18px;
+  max-width: 85%;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--mid-text);
+}
+
+.chat-bubble-user {
+  background: linear-gradient(135deg, var(--teal), var(--royal));
+  border-radius: 18px 18px 4px 18px;
+  padding: 12px 16px;
+  max-width: 80%;
+  font-size: 0.9rem;
+  color: white;
+  margin-left: auto;
+}
+
+/* Typing indicator */
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+.typing-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--teal);
+  animation: bounce 1.2s ease infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* Step indicator */
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--warm-gray-light);
+  transition: color 0.3s;
+}
+.step-item.active { color: var(--teal); }
+.step-item.done { color: var(--emerald); }
+.step-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--ivory-border);
+  transition: background 0.3s;
+  flex-shrink: 0;
+}
+.step-item.active .step-dot { background: var(--teal); box-shadow: 0 0 0 3px rgba(13,148,136,0.2); }
+.step-item.done .step-dot { background: var(--emerald); }
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.animate-fade-up { animation: fadeUp 0.5s ease both; }
+.animate-fade-in { animation: fadeIn 0.4s ease both; }
+.animate-pulse-soft { animation: pulse-soft 2s ease infinite; }
+.animate-spin { animation: spin 1s linear infinite; }
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+
+/* Divider */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ivory-border), transparent);
+  margin: 0;
+}
+
+/* Navbar */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(250, 248, 244, 0.88);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--ivory-border);
+  padding: 0 40px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Stat card */
+.stat-card {
+  background: white;
+  border: 1px solid var(--ivory-border);
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 12px var(--shadow-warm);
+}
+
+/* Impact card shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, var(--ivory-dark) 25%, var(--ivory-border) 50%, var(--ivory-dark) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* Scrollable chat */
+.chat-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ivory-border) transparent;
+}
+.chat-scroll::-webkit-scrollbar { width: 4px; }
+.chat-scroll::-webkit-scrollbar-thumb { background: var(--ivory-border); border-radius: 4px; }
+
+/* Premium NFT Badge Styling */
+.badge-nft-card {
+  position: relative;
+  border-radius: 20px;
+  padding: 32px 20px;
+  text-align: center;
+  margin-bottom: 20px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4), 
+              0 12px 32px rgba(0, 0, 0, 0.08);
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+              box-shadow 0.4s ease;
+  z-index: 1;
+}
+.badge-nft-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 60%);
+  pointer-events: none;
+  z-index: 2;
+}
+.card-hover:hover .badge-nft-card {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 
+              0 24px 48px rgba(0, 0, 0, 0.12);
+}
+.badge-nft-icon {
+  font-size: 52px;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 8px 16px rgba(0,0,0,0.15));
+  position: relative;
+  z-index: 3;
+}
+.badge-nft-ngo {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+  position: relative;
+  z-index: 3;
+  text-shadow: 0 2px 4px rgba(255,255,255,0.6);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .navbar { padding: 0 20px; }
+  .hide-mobile { display: none !important; }
+}
