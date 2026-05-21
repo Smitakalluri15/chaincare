@@ -63,9 +63,9 @@ Want to run ChainCare locally?
    Create a `.env` file in the root directory:
    ```env
    VITE_GROQ_API_KEY="your_groq_key"
-   VITE_DONATION_CONTRACT="0xcD78Daa7f9d7F3DfEFC53df89FED946d0712DA5a"
-   VITE_BADGE_CONTRACT="0xe2f1D9755aBB7421D8E2257C4C3061d713d95642"
-   VITE_DONATION_START_BLOCK="17482596"
+   VITE_DONATION_CONTRACT=
+   VITE_BADGE_CONTRACT=
+   VITE_DONATION_START_BLOCK=
    ```
 
 4. **Run the development server:**
