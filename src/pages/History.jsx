@@ -1,18 +1,7 @@
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { useContracts } from "../hooks/useContracts";
-
-function shortenAddress(addr) {
-  if (!addr) return "";
-  return addr.slice(0, 6) + "…" + addr.slice(-4);
-}
-
-const NGO_ICONS = {
-  "Food Relief Fund": "🍱",
-  "Education Support NGO": "📚",
-  "Animal Welfare NGO": "🐾",
-  "Disaster Relief Campaign": "🆘",
-};
+import { shortenAddress } from "../utils/helpers";
 
 export default function History() {
   const { donationReader } = useContracts();
@@ -21,109 +10,162 @@ export default function History() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const load = async () => {
-      if (!donationReader) { setError("Contract not configured."); setLoading(false); return; }
+    const loadHistory = async () => {
+      if (!donationReader) {
+        setItems([]);
+        setError("Donation contract is not configured.");
+        setLoading(false);
+        return;
+      }
+
       try {
+        setLoading(true);
+        setError("");
+
         const records = await donationReader.getAllDonations();
-        const rows = records.map((r, i) => ({
-          donationId: i,
-          donor: r.donor,
-          ngoName: r.ngoName,
-          amount: parseFloat(ethers.formatEther(r.amount)),
-          timestamp: Number(r.timestamp),
+        const rows = records.map((record, index) => ({
+          donationId: index,
+          donor: record.donor,
+          ngoName: record.ngoName,
+          amount: parseFloat(ethers.formatEther(record.amount)),
+          timestamp: Number(record.timestamp),
           txHash: null,
-        }));
-        
-        // Show immediately
-        setItems([...rows].reverse());
+        })).reverse();
+
+        // Show the history list immediately. Tx-hash enrichment is optional and
+        // can be expensive when no deployment start block is configured.
+        setItems(rows);
         setLoading(false);
 
-        // Fetch txHash asynchronously in the background
-        const runner = donationReader.runner?.provider ?? donationReader.runner;
-        const startBlock = Number(import.meta.env.VITE_DONATION_START_BLOCK ?? 0);
-        if (runner?.getBlockNumber) {
-          try {
-            const currentBlock = await runner.getBlockNumber();
-            // Start from at most 10,000 blocks ago to prevent rate limits
-            const safeStartBlock = Math.max(startBlock, currentBlock - 10000);
-            const step = 2000;
-            const txMap = new Map();
-            for (let s = safeStartBlock; s <= currentBlock; s += step) {
-              const end = Math.min(s + step - 1, currentBlock);
-              const events = await donationReader.queryFilter(donationReader.filters.DonationMade(), s, end);
-              events.forEach(e => { const id = Number(e.args?.donationId); if (Number.isFinite(id)) txMap.set(id, e.transactionHash); });
-            }
-            if (txMap.size > 0) {
-              setItems(currentItems => currentItems.map(item => ({
-                ...item,
-                txHash: txMap.get(item.donationId) ?? item.txHash
-              })));
-            }
-          } catch { /* silently fail */ }
+        const startBlockValue = import.meta.env.VITE_DONATION_START_BLOCK;
+        if (!startBlockValue) {
+          return;
         }
-      } catch { setError("Unable to load donation history."); setLoading(false); }
+
+        const runner = donationReader.runner?.provider ?? donationReader.runner;
+        const startBlock = Number(startBlockValue);
+        if (!runner?.getBlockNumber || !Number.isFinite(startBlock) || startBlock < 0) {
+          return;
+        }
+
+        try {
+          const currentBlock = await runner.getBlockNumber();
+          const step = 1800;
+          const txHashesByDonationId = new Map();
+
+          for (let start = startBlock; start <= currentBlock; start += step) {
+            const end = Math.min(start + step - 1, currentBlock);
+            const events = await donationReader.queryFilter(
+              donationReader.filters.DonationMade(),
+              start,
+              end,
+            );
+
+            events.forEach((event) => {
+              const donationId = Number(event.args?.donationId);
+              if (Number.isFinite(donationId)) {
+                txHashesByDonationId.set(donationId, event.transactionHash);
+              }
+            });
+          }
+
+          setItems((currentItems) =>
+            currentItems.map((row) => ({
+              ...row,
+              txHash: txHashesByDonationId.get(row.donationId) ?? row.txHash,
+            })),
+          );
+        } catch (eventError) {
+          console.warn("Failed to enrich donation history with tx hashes:", eventError);
+        }
+      } catch (error) {
+        console.error("Failed to load donation history:", error);
+        setItems([]);
+        setError("Unable to load donation history from Base Sepolia right now.");
+      } finally {
+        setLoading(false);
+      }
     };
-    load();
+
+    void loadHistory();
   }, [donationReader]);
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "36px 24px" }}>
-      <div className="animate-fade-up" style={{ marginBottom: 32 }}>
-        <h1 className="font-display" style={{ fontSize: "2rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--dark-text)", marginBottom: 6 }}>
+    <div className="relative z-10 max-w-6xl mx-auto px-6 py-10">
+      <div className="mb-8">
+        <h1 className="font-syne text-3xl font-bold text-slate-100 mb-1">
           Donation History
         </h1>
-        <p style={{ color: "var(--warm-gray)", fontSize: "0.9rem" }}>
-          Live on-chain donations recorded on Base Sepolia — fully transparent.
+        <p className="text-slate-400 text-sm">
+          Live on-chain donations recorded through ChainCare on Base Sepolia.
         </p>
       </div>
 
-      <div className="card animate-fade-up delay-100" style={{ overflow: "hidden" }}>
-        {/* Table header */}
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1.3fr 0.7fr 1.1fr 1fr",
-          gap: 12, padding: "14px 24px", borderBottom: "1px solid var(--ivory-border)",
-          fontSize: "0.72rem", fontWeight: 700, color: "var(--warm-gray-light)",
-          letterSpacing: "0.06em", textTransform: "uppercase"
-        }}>
-          <span>Donor</span><span>NGO</span><span>Amount</span><span>Time</span><span>Tx Hash</span>
-        </div>
+      <div className="glass rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <div className="min-w-[880px]">
+            <div className="grid grid-cols-[1.1fr_1.2fr_.7fr_1.1fr_1fr] gap-4 px-5 py-4 border-b border-border text-xs text-slate-500 uppercase tracking-wide">
+              <span>Donor</span>
+              <span>NGO</span>
+              <span>Amount</span>
+              <span>Timestamp</span>
+              <span>Tx Hash</span>
+            </div>
 
-        {loading && <div style={{ padding: 40, textAlign: "center", color: "var(--warm-gray-light)" }}>Loading history…</div>}
-        {error && <div style={{ padding: 40, textAlign: "center", color: "var(--rose)" }}>{error}</div>}
-        {!loading && !error && items.length === 0 && (
-          <div style={{ padding: 40, textAlign: "center", color: "var(--warm-gray-light)" }}>No donations found yet.</div>
-        )}
+            {loading && (
+              <div className="px-5 py-10 text-sm text-slate-400">
+                Loading donation history...
+              </div>
+            )}
 
-        {items.map((item, idx) => (
-          <div key={`${item.txHash}-${item.donationId}`} style={{
-            display: "grid", gridTemplateColumns: "1fr 1.3fr 0.7fr 1.1fr 1fr",
-            gap: 12, padding: "16px 24px",
-            borderBottom: idx < items.length - 1 ? "1px solid var(--ivory-border)" : "none",
-            transition: "background 0.15s"
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--ivory)"}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-          >
-            <div style={{ fontFamily: "DM Mono, monospace", fontSize: "0.82rem", color: "var(--mid-text)" }}>{shortenAddress(item.donor)}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: "var(--dark-text)", fontWeight: 500 }}>
-              <span>{NGO_ICONS[item.ngoName] || "🌍"}</span> {item.ngoName}
-            </div>
-            <div style={{ fontWeight: 700, color: "var(--teal)", fontSize: "0.9rem" }}>{item.amount} TYI</div>
-            <div style={{ fontSize: "0.8rem", color: "var(--warm-gray)" }}>
-              {new Date(item.timestamp * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-            </div>
-            <div style={{ fontSize: "0.8rem" }}>
-              {item.txHash ? (
-                <a href={`https://sepolia.basescan.org/tx/${item.txHash}`} target="_blank" rel="noreferrer"
-                  style={{ color: "var(--teal)", fontFamily: "DM Mono, monospace", textDecoration: "underline" }}>
-                  {shortenAddress(item.txHash)}
-                </a>
-              ) : (
-                <span style={{ color: "var(--warm-gray-light)" }}>—</span>
-              )}
-            </div>
+            {!loading && error && (
+              <div className="px-5 py-10 text-sm text-rose-300">
+                {error}
+              </div>
+            )}
+
+            {!loading && !error && items.length === 0 && (
+              <div className="px-5 py-10 text-sm text-slate-400">
+                No donations found yet.
+              </div>
+            )}
+
+            {!loading &&
+              !error &&
+              items.map((item) => (
+                <div
+                  key={`${item.txHash ?? "donation"}-${item.donationId}`}
+                  className="grid grid-cols-[1.1fr_1.2fr_.7fr_1.1fr_1fr] gap-4 px-5 py-4 border-b border-border last:border-0 text-sm"
+                >
+                  <div className="text-slate-200">{shortenAddress(item.donor)}</div>
+                  <div className="text-slate-300">{item.ngoName}</div>
+                  <div className="text-accent font-medium">
+                    {item.amount.toLocaleString(undefined, {
+                      maximumFractionDigits: 4,
+                    })}{" "}
+                    TYI
+                  </div>
+                  <div className="text-slate-300">
+                    {new Date(item.timestamp * 1000).toLocaleString()}
+                  </div>
+                  <div>
+                    {item.txHash ? (
+                      <a
+                        href={`https://sepolia.basescan.org/tx/${item.txHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent hover:underline break-all"
+                      >
+                        {shortenAddress(item.txHash)}
+                      </a>
+                    ) : (
+                      <span className="text-slate-500">Unavailable</span>
+                    )}
+                  </div>
+                </div>
+              ))}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );

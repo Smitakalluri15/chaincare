@@ -1,186 +1,264 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { useContracts } from "../hooks/useContracts";
 import { useWallet } from "../context/useWallet";
 
+export default function Badges() {
+  const { account } = useWallet();
+  const { badgeReader, badgeWriter, donationReader } = useContracts();
+  const [badges, setBadges] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [mintingMissing, setMintingMissing] = useState(false);
+  const [missingBadgeCount, setMissingBadgeCount] = useState(0);
+  const [canMintMissing, setCanMintMissing] = useState(false);
+  const [helperText, setHelperText] = useState("");
+
+  const loadBadges = useCallback(async () => {
+    if (!account) {
+      setBadges([]);
+      setError("");
+      setHelperText("");
+      setMissingBadgeCount(0);
+      setCanMintMissing(false);
+      setLoading(false);
+      return;
+    }
+
+    if (!badgeReader) {
+      setBadges([]);
+      setError("Badge contract is not configured.");
+      setHelperText("");
+      setMissingBadgeCount(0);
+      setCanMintMissing(false);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      setHelperText("");
+
+      const [tokenIds, donations, badgeOwner] = await Promise.all([
+        badgeReader.getBadgesByDonor(account),
+        donationReader?.getDonationsByUser(account) ?? Promise.resolve([]),
+        badgeReader.owner().catch(() => null),
+      ]);
+
+      const rows = await Promise.all(
+        tokenIds.map(async (tokenId) => {
+          const tokenUri = await badgeReader.tokenURI(tokenId);
+          const metadata = parseTokenMetadata(tokenUri);
+          const ngo = metadata.attributes?.find(
+            (attr) => attr.trait_type === "NGO",
+          )?.value;
+          const tier = metadata.attributes?.find(
+            (attr) => attr.trait_type === "Tier",
+          )?.value;
+
+          return {
+            tokenId: Number(tokenId),
+            name: metadata.name ?? `ChainCare Donor Badge #${tokenId}`,
+            description:
+              metadata.description ??
+              "A donor badge earned through a ChainCare donation.",
+            ngo: ngo ?? "ChainCare NGO",
+            tier: tier ?? "Bronze",
+          };
+        }),
+      );
+
+      const missingCount = Math.max(0, donations.length - tokenIds.length);
+      const ownsMintRole =
+        Boolean(badgeOwner) &&
+        badgeOwner.toLowerCase() === account.toLowerCase();
+
+      setBadges(rows.reverse());
+      setMissingBadgeCount(missingCount);
+      setCanMintMissing(Boolean(missingCount > 0 && ownsMintRole && badgeWriter));
+
+      if (missingCount > 0) {
+        if (ownsMintRole && badgeWriter) {
+          setHelperText(
+            `${missingCount} donation badge${missingCount > 1 ? "s are" : " is"} missing from the live contract. You can mint ${missingCount > 1 ? "them" : "it"} here.`,
+          );
+        } else {
+          setHelperText(
+            "This deployed badge contract has not auto-minted your past donations yet.",
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load badges:", error);
+      setBadges([]);
+      setError("Unable to load badges for this wallet right now.");
+      setMissingBadgeCount(0);
+      setCanMintMissing(false);
+      setHelperText("");
+    } finally {
+      setLoading(false);
+    }
+  }, [account, badgeReader, badgeWriter, donationReader]);
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      void loadBadges();
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
+  }, [loadBadges]);
+
+  const handleMintMissing = async () => {
+    if (!account || !badgeWriter || !donationReader) {
+      toast.error("Badge minting is not ready.");
+      return;
+    }
+
+    try {
+      setMintingMissing(true);
+      const [donations, existingTokenIds] = await Promise.all([
+        donationReader.getDonationsByUser(account),
+        badgeWriter.getBadgesByDonor(account),
+      ]);
+
+      const pendingDonations = donations.slice(existingTokenIds.length);
+      if (!pendingDonations.length) {
+        toast.success("No missing badges left to mint.");
+        await loadBadges();
+        return;
+      }
+
+      for (const donation of pendingDonations) {
+        const mintTx = await badgeWriter.mintBadge(
+          account,
+          donation.ngoName,
+          donation.amount,
+        );
+        await mintTx.wait();
+      }
+
+      toast.success("Missing badges minted successfully.");
+      await loadBadges();
+    } catch (mintError) {
+      console.error("Failed to mint missing badges:", mintError);
+      toast.error("Badge mint failed. Check wallet confirmation and try again.");
+    } finally {
+      setMintingMissing(false);
+    }
+  };
+
+  return (
+    <div className="relative z-10 max-w-6xl mx-auto px-6 py-10">
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <h1 className="font-syne text-3xl font-bold text-slate-100 mb-1">
+          My Badges
+        </h1>
+        <div className="md:text-right">
+          <p className="text-slate-400 text-sm">
+            NFT donor badges minted from your ChainCare donations.
+          </p>
+          {canMintMissing && (
+            <button
+              type="button"
+              onClick={handleMintMissing}
+              disabled={mintingMissing}
+              className="mt-3 rounded-xl bg-gradient-to-r from-accent2 to-indigo-500 px-4 py-2 text-sm font-medium text-white transition-all hover:-translate-y-0.5 disabled:opacity-60"
+            >
+              {mintingMissing
+                ? "Minting missing badges..."
+                : `Mint ${missingBadgeCount} Missing Badge${missingBadgeCount > 1 ? "s" : ""}`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!loading && !error && helperText && (
+        <div className="mb-5 glass rounded-2xl p-4 text-sm text-slate-300">
+          {helperText}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {!account && !loading && (
+          <div className="glass rounded-2xl p-5 text-sm text-slate-400 md:col-span-2 lg:col-span-3">
+            Connect your wallet to view your ChainCare donor badges.
+          </div>
+        )}
+
+        {loading && (
+          <div className="glass rounded-2xl p-5 text-sm text-slate-400">
+            Loading badges...
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="glass rounded-2xl p-5 text-sm text-rose-300 md:col-span-2 lg:col-span-3">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && account && badges.length === 0 && (
+          <div className="glass rounded-2xl p-5 text-sm text-slate-400">
+            No badges minted yet. Make a donation to earn your first donor badge.
+          </div>
+        )}
+
+        {!loading &&
+          !error &&
+          badges.map((badge) => (
+            <div key={badge.tokenId} className="glass rounded-2xl p-5">
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h2 className="font-syne text-xl font-bold text-slate-100">
+                    {badge.name}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Token #{badge.tokenId}
+                  </p>
+                </div>
+                <div className="px-3 py-1 rounded-full text-xs font-medium border border-accent/20 text-accent bg-accent/10">
+                  {badge.tier}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-surface/70 p-6 mb-4 text-center">
+                <div className="font-syne text-4xl text-accent mb-2">
+                  {tierEmoji(badge.tier)}
+                </div>
+                <div className="text-slate-200 font-medium">{badge.ngo}</div>
+              </div>
+
+              <p className="text-sm text-slate-400 leading-relaxed">
+                {badge.description}
+              </p>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 function parseTokenMetadata(uri) {
-  if (!uri) return {};
+  if (!uri) {
+    return {};
+  }
+
   if (uri.startsWith("data:application/json;base64,")) {
     const [, base64] = uri.split("base64,");
     return JSON.parse(window.atob(base64));
   }
+
   if (uri.startsWith("data:application/json,")) {
-    return JSON.parse(decodeURIComponent(uri.split("data:application/json,")[1]));
+    const [, encodedJson] = uri.split("data:application/json,");
+    return JSON.parse(decodeURIComponent(encodedJson));
   }
+
   return JSON.parse(uri);
 }
 
-const TIER_CONFIG = {
-  Gold:   { emoji: "🥇", gradient: "linear-gradient(135deg, #FFE87C, #D4AF37, #B8860B)", color: "#78350f", border: "rgba(217,119,6,0.6)", badge: "badge-gold" },
-  Silver: { emoji: "🥈", gradient: "linear-gradient(135deg, #F8F9FA, #E2E8F0, #94A3B8)", color: "#334155", border: "rgba(100,116,139,0.5)", badge: "badge-royal" },
-  Bronze: { emoji: "🥉", gradient: "linear-gradient(135deg, #FFEDD5, #FDBA74, #C2410C)", color: "#7c2d12", border: "rgba(234,88,12,0.5)", badge: "badge-teal" },
-};
-
-const NGO_ICONS = {
-  "Food Relief Fund": "🍱",
-  "Education Support NGO": "📚",
-  "Animal Welfare NGO": "🐾",
-  "Disaster Relief Campaign": "🆘",
-};
-
-export default function Badges() {
-  const { account, connectWallet } = useWallet();
-  const { badgeReader } = useContracts();
-  const [badges, setBadges] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const load = async () => {
-      if (!account) { setBadges([]); setLoading(false); return; }
-      if (!badgeReader) { setError("Badge contract not configured."); setLoading(false); return; }
-      try {
-        const tokenIds = await badgeReader.getBadgesByDonor(account);
-        const rows = await Promise.all(tokenIds.map(async tokenId => {
-          const uri = await badgeReader.tokenURI(tokenId);
-          const meta = parseTokenMetadata(uri);
-          const ngo = meta.attributes?.find(a => a.trait_type === "NGO")?.value;
-          const tier = meta.attributes?.find(a => a.trait_type === "Tier")?.value;
-          return { tokenId: Number(tokenId), name: meta.name ?? `Badge #${tokenId}`, description: meta.description ?? "", ngo: ngo ?? "ChainCare", tier: tier ?? "Bronze" };
-        }));
-        setBadges(rows.reverse());
-      } catch { setError("Unable to load badges."); }
-      finally { setLoading(false); }
-    };
-    load();
-  }, [account, badgeReader]);
-
-  const goldCount = badges.filter(b => b.tier === "Gold").length;
-  const silverCount = badges.filter(b => b.tier === "Silver").length;
-  const bronzeCount = badges.filter(b => b.tier === "Bronze").length;
-
-  return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "36px 24px" }}>
-      {/* Header */}
-      <div className="animate-fade-up" style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <h1 className="font-display" style={{ fontSize: "2rem", fontWeight: 700, letterSpacing: "-0.02em", color: "var(--dark-text)", marginBottom: 6 }}>
-            My Donor Badges
-          </h1>
-          <p style={{ color: "var(--warm-gray)", fontSize: "0.9rem" }}>
-            NFT badges minted on-chain — permanent proof of your generosity.
-          </p>
-        </div>
-        {account?.toLowerCase() === "0xe7862283741f429a3f7492e58b1182930dd4a9f5" && (
-          <button 
-            className="btn-primary" 
-            style={{ padding: "10px 20px" }}
-            onClick={async () => {
-              try {
-                const badgeAddress = import.meta.env.VITE_DONOR_BADGE_CONTRACT_ADDRESS ?? import.meta.env.VITE_BADGE_CONTRACT;
-                const ethers = await import("ethers").then(m => m.ethers);
-                // eslint-disable-next-line no-undef
-                const signer = await new ethers.BrowserProvider(window.ethereum).getSigner();
-                const contract = new ethers.Contract(badgeAddress, ["function mintBadge(address,string,uint256) external"], signer);
-                await contract.mintBadge(account, "Food Relief Fund", ethers.parseEther("50"));
-                alert("Claiming badge... Please wait for the transaction to confirm, then refresh!");
-              } catch (e) {
-                console.error(e);
-                alert("Failed to claim badge. Check console.");
-              }
-            }}
-          >
-            ✦ Claim Badge (Admin)
-          </button>
-        )}
-      </div>
-
-      {/* Summary row */}
-      {!loading && badges.length > 0 && (
-        <div className="animate-fade-up delay-100" style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
-          <div className="stat-card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px" }}>
-            <span style={{ fontSize: 24 }}>🏅</span>
-            <div>
-              <div className="font-display" style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--teal)" }}>{badges.length}</div>
-              <div style={{ fontSize: "0.72rem", color: "var(--warm-gray-light)" }}>Total Badges</div>
-            </div>
-          </div>
-          {goldCount > 0 && <div className="stat-card" style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 20px" }}>
-            <span style={{ fontSize: 22 }}>🥇</span>
-            <div><div style={{ fontWeight: 700, color: "#92400e" }}>{goldCount}</div><div style={{ fontSize: "0.72rem", color: "var(--warm-gray-light)" }}>Gold</div></div>
-          </div>}
-          {silverCount > 0 && <div className="stat-card" style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 20px" }}>
-            <span style={{ fontSize: 22 }}>🥈</span>
-            <div><div style={{ fontWeight: 700, color: "#475569" }}>{silverCount}</div><div style={{ fontSize: "0.72rem", color: "var(--warm-gray-light)" }}>Silver</div></div>
-          </div>}
-          {bronzeCount > 0 && <div className="stat-card" style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 20px" }}>
-            <span style={{ fontSize: 22 }}>🥉</span>
-            <div><div style={{ fontWeight: 700, color: "#9a3412" }}>{bronzeCount}</div><div style={{ fontSize: "0.72rem", color: "var(--warm-gray-light)" }}>Bronze</div></div>
-          </div>}
-        </div>
-      )}
-
-      {/* Not connected */}
-      {!account && !loading && (
-        <div className="card" style={{ padding: 48, textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
-          <p style={{ color: "var(--warm-gray)", marginBottom: 20 }}>Connect your wallet to view your donor badges.</p>
-          <button onClick={connectWallet} className="btn-primary">Connect Wallet</button>
-        </div>
-      )}
-
-      {loading && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
-          {Array(3).fill(0).map((_, i) => <div key={i} style={{ height: 300, borderRadius: 20 }} className="shimmer" />)}
-        </div>
-      )}
-
-      {error && <div style={{ padding: 32, textAlign: "center", color: "var(--rose)" }}>{error}</div>}
-
-      {!loading && !error && account && badges.length === 0 && (
-        <div className="card" style={{ padding: 48, textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🌱</div>
-          <h3 className="font-display" style={{ fontSize: "1.2rem", color: "var(--dark-text)", marginBottom: 8 }}>No badges yet</h3>
-          <p style={{ color: "var(--warm-gray)", fontSize: "0.9rem" }}>Make your first donation to earn a ChainCare donor badge.</p>
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
-        {badges.map(badge => {
-          const cfg = TIER_CONFIG[badge.tier] || TIER_CONFIG.Bronze;
-          return (
-            <div key={badge.tokenId} className="card card-hover animate-fade-up" style={{ padding: 24, overflow: "hidden" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                <div>
-                  <h2 style={{ fontFamily: "Playfair Display, serif", fontSize: "1rem", fontWeight: 700, color: "var(--dark-text)", marginBottom: 2 }}>
-                    {badge.name}
-                  </h2>
-                  <div style={{ fontFamily: "DM Mono, monospace", fontSize: "0.72rem", color: "var(--warm-gray-light)" }}>
-                    Token #{badge.tokenId}
-                  </div>
-                </div>
-                <div className={`badge ${cfg.badge}`}>{badge.tier}</div>
-              </div>
-
-              {/* Badge visual */}
-              <div 
-                className="badge-nft-card"
-                style={{
-                  background: cfg.gradient, 
-                  border: `1px solid ${cfg.border}`,
-                }}
-              >
-                <div className="badge-nft-icon">{cfg.emoji}</div>
-                <div style={{ fontSize: 16, marginBottom: 8 }}>{NGO_ICONS[badge.ngo] || "🌍"}</div>
-                <div className="badge-nft-ngo" style={{ color: cfg.color }}>
-                  {badge.ngo}
-                </div>
-              </div>
-
-              <p style={{ fontSize: "0.82rem", color: "var(--warm-gray)", lineHeight: 1.6 }}>{badge.description}</p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+function tierEmoji(tier) {
+  if (tier === "Gold") return "🥇";
+  if (tier === "Silver") return "🥈";
+  return "🥉";
 }

@@ -18,23 +18,27 @@ export const STEPS = [
 ];
 
 export function useDonate({ onSuccess }) {
-    const { account, signer, isCorrectNetwork, chainId } = useWallet();
-    const { donationAddress } = useContracts();
-    const [activeStep, setActiveStep] = useState(0); // 0 = idle
-    const [donatingId, setDonatingId] = useState(null); // which NGO
-    const [lastDonation, setLastDonation] = useState(null);
+  const { account, signer, isCorrectNetwork } = useWallet();
+  const { donationAddress, readProvider } = useContracts();
+  const [activeStep, setActiveStep] = useState(0); // 0 = idle
+  const [donatingId, setDonatingId] = useState(null); // which NGO
+  const [lastDonation, setLastDonation] = useState(null);
 
-    const donate = async (ngoName, amountTYI, ngoId) => {
-      if (!account) {
-        toast.error("Connect your wallet first!");
-        return;
-      }
-      if (!isCorrectNetwork) {
-        toast.error(`Wrong network! MetaMask is on chainId: ${chainId}, expected 84532.`);
-        return;
-      }
+  const donate = async (ngoName, amountTYI, ngoId) => {
+    if (!account) {
+      toast.error("Connect your wallet first!");
+      return;
+    }
+    if (!isCorrectNetwork) {
+      toast.error("Switch to Base Sepolia first.");
+      return;
+    }
     if (!signer) {
       toast.error("Wallet signer not ready.");
+      return;
+    }
+    if (!readProvider) {
+      toast.error("Base Sepolia RPC is not configured.");
       return;
     }
     if (!donationAddress) {
@@ -55,8 +59,9 @@ export function useDonate({ onSuccess }) {
         amountWei,
       ]);
       const client = new UGFClient();
+      const ugfSigner = createUgfCompatibleSigner(signer, readProvider);
 
-      await client.auth.login(signer);
+      await client.auth.login(ugfSigner);
 
       // Step 1: Quote the remote transaction
       setActiveStep(1);
@@ -74,31 +79,15 @@ export function useDonate({ onSuccess }) {
       setActiveStep(2);
       await client.payment.x402.execute({
         quote,
-        signer,
+        signer: ugfSigner,
         token: TYI_USD_PAYMENT_COIN,
       });
 
       // Step 3: UGF sponsors and executes the donation tx
       setActiveStep(3);
-      
-      // Patch for MetaMask Base Sepolia getFeeData bug
-      const originalGetFeeData = signer.provider.getFeeData.bind(signer.provider);
-      signer.provider.getFeeData = async () => {
-        try {
-          return await originalGetFeeData();
-        } catch (err) {
-          const gasPrice = await signer.provider.send("eth_gasPrice", []);
-          return {
-            gasPrice: BigInt(gasPrice),
-            maxFeePerGas: null,
-            maxPriorityFeePerGas: null
-          };
-        }
-      };
-
       const { userTxHash } = await client.chains.evm.sponsorAndExecute(
         quote.digest,
-        signer,
+        ugfSigner,
         async () => ({
           to: donationAddress,
           data: txData,
@@ -122,6 +111,8 @@ export function useDonate({ onSuccess }) {
 
       if (err?.code === 4001) {
         toast.error("Transaction rejected.");
+      } else if (err?.code === -32601 || err?.code === -32603) {
+        toast.error("Wallet RPC failed. Retry after switching to Base Sepolia.");
       } else if (err instanceof UGFError) {
         toast.error(`UGF ${formatStageError(err)}`);
       } else {
@@ -141,4 +132,15 @@ export function useDonate({ onSuccess }) {
 function formatStageError(err) {
   const message = err?.message ?? "flow failed.";
   return message.charAt(0).toLowerCase() + message.slice(1);
+}
+
+function createUgfCompatibleSigner(walletSigner, readProvider) {
+  return {
+    provider: readProvider,
+    getAddress: () => walletSigner.getAddress(),
+    signMessage: (message) => walletSigner.signMessage(message),
+    signTypedData: (domain, types, value) =>
+      walletSigner.signTypedData(domain, types, value),
+    sendTransaction: (tx) => walletSigner.sendTransaction(tx),
+  };
 }
