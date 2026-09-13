@@ -8,7 +8,6 @@ const DONATION_ABI = [
   "function getDonorCount() external view returns (uint256)",
   "function getNGODonations(string ngoName) external view returns (uint256)",
   "function getAllDonations() external view returns ((address donor,string ngoName,uint256 amount,uint256 timestamp)[])",
-  "function getDonationsByUser(address donor) external view returns ((address donor,string ngoName,uint256 amount,uint256 timestamp)[])",
   "function getAllDonors() external view returns (address[])",
   "function donorTotals(address) external view returns (uint256)",
   "event DonationMade(address indexed donor, string indexed ngoName, uint256 amount, uint256 timestamp, uint256 donationId)",
@@ -18,7 +17,6 @@ const DONOR_BADGE_ABI = [
   "function mintBadge(address donor, string ngoName, uint256 amount) external returns (uint256)",
   "function getBadgesByDonor(address donor) external view returns (uint256[])",
   "function tokenURI(uint256 tokenId) external view returns (string)",
-  "function owner() external view returns (address)",
 ];
 
 export function useContracts() {
@@ -33,10 +31,14 @@ export function useContracts() {
     import.meta.env.VITE_BADGE_CONTRACT;
 
   const readProvider = useMemo(() => {
-    if (publicRpcUrl) {
-      return new ethers.JsonRpcProvider(publicRpcUrl);
+    if (provider) {
+      return provider;
     }
-    return provider ?? null;
+    if (!publicRpcUrl) {
+      return null;
+    }
+
+    return new ethers.JsonRpcProvider(publicRpcUrl);
   }, [provider, publicRpcUrl]);
 
   const donationReader = useMemo(() => {

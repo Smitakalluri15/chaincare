@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { ethers } from "ethers";
 import { useWallet } from "../context/useWallet";
 import { useDonationStats } from "../hooks/useDonationStats";
 import { useDonate } from "../hooks/useDonate";

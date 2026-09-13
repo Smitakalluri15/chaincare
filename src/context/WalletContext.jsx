@@ -25,7 +25,7 @@ export function WalletProvider({ children }) {
   const tokenAddress = import.meta.env.VITE_TYI_TOKEN_ADDRESS ?? null;
 
   // Is the user on Base Sepolia?
-  const isCorrectNetwork = Number(chainId) === BASE_SEPOLIA_CHAIN_ID_DEC;
+  const isCorrectNetwork = chainId === BASE_SEPOLIA_CHAIN_ID_DEC;
 
   // ─── Connect wallet ──────────────────────────────────────────────────────
   const connectWallet = useCallback(async () => {
